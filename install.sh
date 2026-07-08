@@ -414,7 +414,7 @@ dbg "Build dir removed."
 PRIORITY=20
 dbg "Checking update-alternatives for existing entry ..."
 dbg "Current alternatives:"
-[[ "$DEBUG" == "1" ]] && update-alternatives --list gdm-theme.gresource 2>/dev/null | while read -r alt; do dbg "  $alt"; done
+[[ "$DEBUG" == "1" ]] && { update-alternatives --list gdm-theme.gresource 2>/dev/null | while read -r alt; do dbg "  $alt"; done; } || true
 
 if update-alternatives --list gdm-theme.gresource 2>/dev/null | \
         grep -q "$INSTALL_THEME_DIR"; then
