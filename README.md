@@ -14,12 +14,17 @@ Apply a modern, premium **glassmorphic** aesthetic to the GNOME Display Manager 
 
 ---
 
-## Supported Distributions
+## Supported Distributions & Branches
+
+> [!NOTE]
+> **Branch Selection**:
+> * Use the **`main`** branch for **Ubuntu** or Ubuntu-based distributions (like **Pop!_OS**).
+> * Use the **`debian`** branch for **Debian**.
 
 This toolkit is designed for systems running **Ubuntu** or **Debian-based** Linux distributions using **GDM3** and the default **Yaru** shell theme.
 
-### Officially Supported
-* **Ubuntu** (20.04 LTS, 22.04 LTS, 24.04 LTS, and newer releases)
+### Supported OS
+* **Ubuntu & Ubuntu-based distros** (20.04 LTS, 22.04 LTS, 24.04 LTS, Pop!_OS, etc.)
 * **Debian** (when using the `gdm3` display manager and with the `yaru-theme-gnome-shell` package installed)
 
 ### Technical Dependencies
@@ -85,7 +90,10 @@ sudo apt install imagemagick
 ### Setup Theme
 
 1. Clone or navigate into this directory.
-2. Run the installer:
+2. Ensure you are on the correct branch for your system:
+   * For **Ubuntu / Pop!_OS**: `git checkout main`
+   * For **Debian**: `git checkout debian`
+3. Run the installer:
    ```bash
    sudo ./install.sh
    ```
@@ -120,7 +128,8 @@ The log file at `/tmp/gdm-install-debug.log` captures full output including warn
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `Cannot locate the original Yaru gresource` | Yaru theme not installed | `sudo apt install yaru-theme-gnome-shell` |
+| `Cannot locate any GDM gresource` | No supported gresource found in any of the 4 search paths | Install Yaru: `sudo apt install yaru-theme-gnome-shell`, or install GNOME Shell: `sudo apt install gnome-shell` |
+| `Script FAILED at line N — update-alternatives --list gdm-theme.gresource` | Old install.sh bug (now fixed): unguarded command substitution under `set -e` | Pull the latest version from the `debian` branch |
 | `gresource: command not found` | Missing GLib tools | `sudo apt install libglib2.0-bin` |
 | `glib-compile-resources: command not found` | Missing GLib dev tools | `sudo apt install libglib2.0-dev-bin` |
 | `gdm.css NOT found in extracted resources` | GDM version uses different structure | Use `DEBUG=1` to inspect extracted files and report the output |
