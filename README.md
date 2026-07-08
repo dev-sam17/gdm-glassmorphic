@@ -97,6 +97,39 @@ sudo apt install imagemagick
 
 ---
 
+## Troubleshooting & Debug Mode
+
+If the install fails, re-run with the `DEBUG=1` flag for verbose, per-step output that logs every file extracted, every command executed, and every intermediate state:
+
+```bash
+sudo DEBUG=1 ./install.sh 2>&1 | tee /tmp/gdm-install-debug.log
+```
+
+The log file at `/tmp/gdm-install-debug.log` captures full output including warnings and errors, and is useful to share when reporting issues.
+
+### What the debug logs include
+* **System diagnostics**: Hostname, kernel version, distribution name, GDM version, and GNOME Shell version — printed at the start of every run.
+* **Dependency check**: Verifies `gresource`, `glib-compile-resources`, `update-alternatives`, `dconf`, and `imagemagick` are installed *before* doing any work. Missing packages are reported with the exact `apt install` command.
+* **ERR trap**: If any command fails, the script prints the exact **line number** and the **failed command** before exiting, making it easy to locate failures without manually tracing through the script.
+* **Per-file extraction logs**: Every file extracted from the Yaru gresource is logged, along with its destination path and byte size.
+* **Manifest generation trace**: Lists every `<file>` entry written into the XML manifest before compilation.
+* **Symlink verification**: After registering with `update-alternatives`, confirms the active symlink points to the newly installed file.
+* **dconf profile trace**: Prints the contents of the written dconf profile to confirm Debian-specific paths are correct.
+
+### Common Failures on Debian
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Cannot locate the original Yaru gresource` | Yaru theme not installed | `sudo apt install yaru-theme-gnome-shell` |
+| `gresource: command not found` | Missing GLib tools | `sudo apt install libglib2.0-bin` |
+| `glib-compile-resources: command not found` | Missing GLib dev tools | `sudo apt install libglib2.0-dev-bin` |
+| `gdm.css NOT found in extracted resources` | GDM version uses different structure | Use `DEBUG=1` to inspect extracted files and report the output |
+| `/etc/gdm3/PostLogin/` does not exist | GDM3 not installed or non-standard setup | `sudo apt install gdm3` |
+| `dconf update` fails | dconf-cli missing | `sudo apt install dconf-cli` |
+| Wallpaper sync fails on step 8 | No active graphical session when run over SSH | Run `sudo update-gdm-wallpaper` after logging into the desktop |
+
+---
+
 ## Configuration & Manual Wallpaper Sync
 
 ### Triggering Wallpaper Sync Manually
