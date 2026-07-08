@@ -433,6 +433,54 @@ if [[ "$ACTIVE_THEME" != "$INSTALL_THEME_DIR/gnome-shell-theme.gresource" ]]; th
     warn "  Got      : $ACTIVE_THEME"
 fi
 
+# ---- 6c. Direct gresource replacement (Debian) ------------------------------
+# On Ubuntu, GDM is patched to read from the update-alternatives symlink at
+# /usr/share/gnome-shell/gdm-theme.gresource. On stock Debian, GDM ignores
+# that symlink entirely and reads directly from:
+#   /usr/share/gnome-shell/gnome-shell-theme.gresource
+#
+# So we must also replace that file with our glassmorphic build.
+echo ""
+echo -e "${BOLD}[6c] Direct gresource replacement (Debian compatibility)${RESET}"
+
+GDM_DIRECT_GRESOURCE="/usr/share/gnome-shell/gnome-shell-theme.gresource"
+GDM_DIRECT_BACKUP="${GDM_DIRECT_GRESOURCE}.orig"
+
+if [[ -f "$GDM_DIRECT_GRESOURCE" ]]; then
+    # Check if this is already our glassmorphic file (re-run protection)
+    DIRECT_SIZE=$(stat -c%s "$GDM_DIRECT_GRESOURCE" 2>/dev/null || echo 0)
+    GLASS_SIZE=$(stat -c%s "$INSTALL_THEME_DIR/gnome-shell-theme.gresource" 2>/dev/null || echo 0)
+    dbg "Direct gresource size : $DIRECT_SIZE bytes"
+    dbg "Glassmorphic size     : $GLASS_SIZE bytes"
+
+    # Check if it's a regular file (not a symlink — Ubuntu would have a symlink here)
+    if [[ ! -L "$GDM_DIRECT_GRESOURCE" ]]; then
+        info "Debian detected: $GDM_DIRECT_GRESOURCE is a regular file (not a symlink)."
+        info "GDM reads this file directly — replacing it with glassmorphic build."
+
+        # Back up only once
+        if [[ ! -f "$GDM_DIRECT_BACKUP" ]]; then
+            info "  Backing up original to: $GDM_DIRECT_BACKUP"
+            cp "$GDM_DIRECT_GRESOURCE" "$GDM_DIRECT_BACKUP"
+            dbg "  Backup size: $(du -h "$GDM_DIRECT_BACKUP" | cut -f1)"
+        else
+            info "  Backup already exists at $GDM_DIRECT_BACKUP — skipping backup."
+            dbg "  Existing backup size: $(du -h "$GDM_DIRECT_BACKUP" | cut -f1)"
+        fi
+
+        # Replace with our glassmorphic build
+        cp "$INSTALL_THEME_DIR/gnome-shell-theme.gresource" "$GDM_DIRECT_GRESOURCE"
+        info "  Replaced $GDM_DIRECT_GRESOURCE with glassmorphic build."
+        dbg "  New file size: $(du -h "$GDM_DIRECT_GRESOURCE" | cut -f1)"
+    else
+        info "$GDM_DIRECT_GRESOURCE is a symlink (Ubuntu-style) — skipping direct replacement."
+        dbg "  Symlink target: $(readlink -f "$GDM_DIRECT_GRESOURCE")"
+    fi
+else
+    warn "$GDM_DIRECT_GRESOURCE not found. GDM may load its theme from an unexpected location."
+    warn "  The update-alternatives symlink should still work on Ubuntu."
+fi
+
 # ---- 6b. Set up GDM dconf profile and system-db -----------------------------
 echo ""
 echo -e "${BOLD}[6b] Configure GDM dconf profile${RESET}"

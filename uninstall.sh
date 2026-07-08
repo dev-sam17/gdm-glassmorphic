@@ -11,23 +11,38 @@ fi
 
 INSTALL_THEME_DIR="/usr/share/gnome-shell/theme/Yaru-Glassmorphic"
 
-# ---- Restore original alternative -------------------------------------------
+# ---- Restore direct gresource (Debian) --------------------------------------
+# On Debian, install.sh replaced /usr/share/gnome-shell/gnome-shell-theme.gresource
+# directly and saved the original as .orig. Restore it if present.
+GDM_DIRECT_GRESOURCE="/usr/share/gnome-shell/gnome-shell-theme.gresource"
+GDM_DIRECT_BACKUP="${GDM_DIRECT_GRESOURCE}.orig"
+
+if [[ -f "$GDM_DIRECT_BACKUP" ]]; then
+    echo "Restoring original gresource from: $GDM_DIRECT_BACKUP"
+    cp "$GDM_DIRECT_BACKUP" "$GDM_DIRECT_GRESOURCE"
+    rm -f "$GDM_DIRECT_BACKUP"
+    echo "  Restored and removed backup."
+else
+    echo "No direct gresource backup found at $GDM_DIRECT_BACKUP — skipping."
+fi
+
+# ---- Restore original alternative (Ubuntu) -----------------------------------
 ORIGINAL=$(update-alternatives --list gdm-theme.gresource 2>/dev/null | \
-    grep -v Glassmorphic | head -1)
+    grep -v Glassmorphic | head -1) || true
 
 if [[ -n "$ORIGINAL" ]]; then
-    echo "Restoring original theme: $ORIGINAL"
-    update-alternatives --set gdm-theme.gresource "$ORIGINAL"
+    echo "Restoring original theme alternative: $ORIGINAL"
+    update-alternatives --set gdm-theme.gresource "$ORIGINAL" 2>/dev/null || true
 else
     # Fallback: restore from backup
-    BACKUP=$(find /usr/share/gnome-shell/theme/Yaru -name "*.gresource.bak" 2>/dev/null | head -1)
+    BACKUP=$(find /usr/share/gnome-shell/theme -name "*.gresource.bak" 2>/dev/null | head -1)
     if [[ -n "$BACKUP" ]]; then
         ORIG="${BACKUP%.bak}"
         echo "Restoring from backup: $BACKUP"
         cp "$BACKUP" "$ORIG"
-        update-alternatives --set gdm-theme.gresource "$ORIG" || true
+        update-alternatives --set gdm-theme.gresource "$ORIG" 2>/dev/null || true
     else
-        echo "WARNING: No original theme found to restore." >&2
+        echo "No update-alternatives entry to restore (normal on Debian)."
     fi
 fi
 
