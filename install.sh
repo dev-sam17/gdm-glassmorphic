@@ -137,36 +137,106 @@ INSTALL_THEME_DIR="/usr/share/gnome-shell/theme/$THEME_NAME"
 BUILD_DIR="$(mktemp -d /tmp/gdm-glassmorphic-XXXXXX)"
 dbg "BUILD_DIR        : $BUILD_DIR"
 
-# ---- Locate original Yaru gresource ------------------------------------------
-# Always source from the ORIGINAL Yaru gresource — never from our own
-# Glassmorphic build, which would double-apply overrides on re-runs.
-ORIGINAL_YARU="/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"
-dbg "Looking for Yaru gresource at: $ORIGINAL_YARU"
+# ---- Locate source gresource -------------------------------------------------
+# Search strategy (in order):
+#   1. Standard Ubuntu/Debian Yaru path
+#   2. update-alternatives (Ubuntu — safe, no-op on Debian where this alt may
+#      not be registered; the command substitution is wrapped in a function
+#      with || true so set -e cannot fire here)
+#   3. Any *.gresource under /usr/share/gnome-shell/theme/ (Debian default
+#      themes: Adwaita, HighContrast, etc.)
+#   4. The canonical GDM fallback at /usr/share/gnome-shell/gnome-shell-theme.gresource
+#
+# We also skip any path that contains "Glassmorphic" to avoid re-applying
+# our own overrides on a re-run.
 
-if [[ ! -f "$ORIGINAL_YARU" ]]; then
-    warn "Standard Yaru gresource not found. Trying update-alternatives fallback ..."
-    dbg "Running: update-alternatives --list gdm-theme.gresource"
-    update-alternatives --list gdm-theme.gresource 2>/dev/null || true
-    ORIGINAL_YARU=$(update-alternatives --list gdm-theme.gresource 2>/dev/null \
-        | grep -v Glassmorphic | grep Yaru | head -1)
-    dbg "update-alternatives fallback result: '${ORIGINAL_YARU:-<empty>}'"
-fi
+_find_gresource() {
+    local candidate=""
 
-if [[ -z "$ORIGINAL_YARU" || ! -f "$ORIGINAL_YARU" ]]; then
-    err "Cannot locate the original Yaru gresource."
-    err "  Searched at : /usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"
-    err "  Also tried  : update-alternatives --list gdm-theme.gresource"
-    err "  Is the Yaru GNOME Shell theme installed?"
+    # 1. Standard Ubuntu Yaru path
+    candidate="/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"
+    if [[ -f "$candidate" ]]; then
+        dbg "  Found via path-1 (Yaru standard): $candidate"
+        echo "$candidate"; return 0
+    fi
+    dbg "  path-1 miss: $candidate"
+
+    # 2. update-alternatives — may not be registered on Debian at all;
+    #    the || true prevents set -e from firing when the alternative is absent.
+    local alt_list=""
+    alt_list=$(update-alternatives --list gdm-theme.gresource 2>/dev/null) || true
+    dbg "  update-alternatives output: '${alt_list:-<none>}'"
+    if [[ -n "$alt_list" ]]; then
+        candidate=$(echo "$alt_list" | grep -v Glassmorphic | grep Yaru | head -1 || true)
+        if [[ -n "$candidate" && -f "$candidate" ]]; then
+            dbg "  Found via path-2 (update-alternatives/Yaru): $candidate"
+            echo "$candidate"; return 0
+        fi
+        # Non-Yaru alternative (e.g., Adwaita on Debian)
+        candidate=$(echo "$alt_list" | grep -v Glassmorphic | head -1 || true)
+        if [[ -n "$candidate" && -f "$candidate" ]]; then
+            dbg "  Found via path-2 (update-alternatives/non-Yaru): $candidate"
+            echo "$candidate"; return 0
+        fi
+    fi
+    dbg "  path-2 miss (no usable alternatives)"
+
+    # 3. Scan /usr/share/gnome-shell/theme/ for any .gresource (Debian ships
+    #    Adwaita, HighContrast, etc. here)
+    dbg "  Scanning /usr/share/gnome-shell/theme/ for *.gresource ..."
+    while IFS= read -r f; do
+        [[ "$f" == *Glassmorphic* ]] && continue
+        dbg "    candidate: $f"
+        echo "$f"; return 0
+    done < <(find /usr/share/gnome-shell/theme -maxdepth 2 \
+                  -name "gnome-shell-theme.gresource" 2>/dev/null | sort)
+    dbg "  path-3 miss"
+
+    # 4. Canonical top-level GDM gresource (some Debian/RHEL setups)
+    candidate="/usr/share/gnome-shell/gnome-shell-theme.gresource"
+    if [[ -f "$candidate" ]]; then
+        dbg "  Found via path-4 (canonical top-level): $candidate"
+        echo "$candidate"; return 0
+    fi
+    dbg "  path-4 miss: $candidate"
+
+    return 1
+}
+
+info "Locating GDM gresource ..."
+SOURCE_GRESOURCE=""
+SOURCE_GRESOURCE=$(_find_gresource) || true
+
+if [[ -z "$SOURCE_GRESOURCE" || ! -f "$SOURCE_GRESOURCE" ]]; then
+    err "Cannot locate any GDM gresource to use as a base."
+    err ""
+    err "  Paths searched:"
+    err "    /usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"
+    err "    update-alternatives --list gdm-theme.gresource"
+    err "    find /usr/share/gnome-shell/theme -name gnome-shell-theme.gresource"
+    err "    /usr/share/gnome-shell/gnome-shell-theme.gresource"
+    err ""
+    err "  On Debian, install the Yaru theme for the best compatibility:"
     err "    sudo apt install yaru-theme-gnome-shell"
-    err "  Available alternatives found:"
-    update-alternatives --list gdm-theme.gresource 2>/dev/null | while read -r alt; do
-        err "    $alt"
-    done
+    err ""
+    err "  Or install any GNOME Shell theme package, for example:"
+    err "    sudo apt install gnome-shell   # provides the default Adwaita gresource"
+    err ""
+    err "  All *.gresource files currently on this system:"
+    find /usr/share/gnome-shell -name "*.gresource" 2>/dev/null | \
+        while read -r f; do err "    $f"; done || true
     exit 1
 fi
 
-SOURCE_GRESOURCE="$ORIGINAL_YARU"
-BACKUP_PATH="$ORIGINAL_YARU.bak"
+# Confirm we're not accidentally re-patching our own output
+if [[ "$SOURCE_GRESOURCE" == *Glassmorphic* ]]; then
+    err "Source gresource resolves to our own Glassmorphic theme: $SOURCE_GRESOURCE"
+    err "This would double-apply the CSS overrides. Remove the old install first:"
+    err "  sudo ./uninstall.sh"
+    exit 1
+fi
+
+BACKUP_PATH="${SOURCE_GRESOURCE}.bak"
 info "Source gresource : $SOURCE_GRESOURCE"
 info "Size             : $(du -h "$SOURCE_GRESOURCE" | cut -f1)"
 
