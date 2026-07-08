@@ -35,8 +35,8 @@ RESET='\033[0m'
 #   err  "message"   — always printed (red, to stderr), does NOT exit
 DEBUG="${DEBUG:-0}"
 
-dbg()  { [[ "$DEBUG" == "1" ]] && echo -e "${CYAN}[DBG]${RESET}  $*" || true; }
-info() { echo -e "${GREEN}[INFO]${RESET} $*"; }
+dbg()  { [[ "$DEBUG" == "1" ]] && echo -e "${CYAN}[DBG]${RESET}  $*" >&2 || true; }
+info() { echo -e "${GREEN}[INFO]${RESET} $*" >&2; }
 warn() { echo -e "${YELLOW}[WARN]${RESET} $*" >&2; }
 err()  { echo -e "${RED}[ERR]${RESET}  $*" >&2; }
 
@@ -309,7 +309,23 @@ info "Appending overrides from: $OVERRIDES_CSS"
 info "Override CSS size: $(wc -l < "$OVERRIDES_CSS") lines / $(wc -c < "$OVERRIDES_CSS") bytes"
 
 CSS_APPLIED=0
-for css_file in "$BUILD_DIR/Yaru"/*.css; do
+
+# Apply to Yaru variants (Ubuntu)
+if [[ -d "$BUILD_DIR/Yaru" ]]; then
+    for css_file in "$BUILD_DIR/Yaru"/*.css; do
+        [[ -f "$css_file" ]] || continue
+        if cat "$OVERRIDES_CSS" >> "$css_file"; then
+            dbg "  [OK] Appended to: Yaru/$(basename "$css_file")"
+            CSS_APPLIED=$((CSS_APPLIED + 1))
+        else
+            warn "  [FAIL] Could not append to: $css_file"
+        fi
+    done
+fi
+
+# Apply to root CSS files (Debian defaults: gnome-shell-dark.css, gdm.css, etc.)
+for css_file in "$BUILD_DIR"/*.css; do
+    [[ -f "$css_file" ]] || continue
     if cat "$OVERRIDES_CSS" >> "$css_file"; then
         dbg "  [OK] Appended to: $(basename "$css_file")"
         CSS_APPLIED=$((CSS_APPLIED + 1))
@@ -317,19 +333,12 @@ for css_file in "$BUILD_DIR/Yaru"/*.css; do
         warn "  [FAIL] Could not append to: $css_file"
     fi
 done
-info "Applied to $CSS_APPLIED Yaru CSS variants."
 
-# CRITICAL: also apply to gdm.css — this is the file GDM actually loads at
-# runtime (not the Yaru-prefixed variants above).
-if [[ -f "$BUILD_DIR/gdm.css" ]]; then
-    cat "$OVERRIDES_CSS" >> "$BUILD_DIR/gdm.css"
-    info "Applied to gdm.css (primary GDM stylesheet)."
-    dbg "gdm.css final size: $(wc -c < "$BUILD_DIR/gdm.css") bytes"
-else
-    warn "gdm.css NOT found in extracted resources!"
-    warn "  This is the primary stylesheet GDM loads at runtime."
-    warn "  Expected at: $BUILD_DIR/gdm.css"
-    warn "  Files in build root: $(ls "$BUILD_DIR" | grep -v Yaru | tr '\n' ' ')"
+info "Applied to $CSS_APPLIED CSS files total."
+
+if [[ $CSS_APPLIED -eq 0 ]]; then
+    warn "No CSS files were patched! The theme may not have any effect."
+    warn "  Files in build root: $(ls "$BUILD_DIR" | tr '\n' ' ')"
 fi
 
 # ---- 4. Generate XML manifest ------------------------------------------------
