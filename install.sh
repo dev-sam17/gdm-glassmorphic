@@ -353,14 +353,18 @@ info "Generating manifest at: $MANIFEST"
     echo '  <gresource prefix="/org/gnome/shell/theme">'
 
     # Yaru CSS files → will be at /org/gnome/shell/theme/Yaru/<file>
-    for f in "$BUILD_DIR/Yaru"/*.css; do
-        fname=$(basename "$f")
-        echo "    <file>Yaru/$fname</file>"
-        dbg "  manifest entry: Yaru/$fname"
-    done
+    if [[ -d "$BUILD_DIR/Yaru" ]]; then
+        for f in "$BUILD_DIR/Yaru"/*.css; do
+            [[ -f "$f" ]] || continue
+            fname=$(basename "$f")
+            echo "    <file>Yaru/$fname</file>"
+            dbg "  manifest entry: Yaru/$fname"
+        done
+    fi
 
     # SVG and other assets → /org/gnome/shell/theme/<file>
     for f in "$BUILD_DIR"/*; do
+        [[ -f "$f" ]] || continue
         fname=$(basename "$f")
         [[ "$fname" == "Yaru" ]] && continue
         [[ "$fname" == "manifest.xml" ]] && continue
